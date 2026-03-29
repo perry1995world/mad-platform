@@ -319,7 +319,7 @@ body.adm-mode .edel{display:flex}
         <select class="fi" id="ecol"><option value="gold">라임</option><option value="blue">블루</option><option value="red">레드</option></select>
       </div>
       <div class="mact">
-        <button class="btn btn-lg btn-lime" onclick="addEv()">일정 저장</button>
+        <button class="btn btn-lg btn-lime" id="evSaveBtn" onclick="addEv()">일정 저장</button>
         <button class="btn btn-lg btn-ghost" onclick="closeM('mev')">취소</button>
       </div>
     </div>
@@ -576,12 +576,17 @@ function cmov(d) {
 async function addEv() {
   const t=$('etit').value.trim(), dt=$('edt').value, tm=$('etm').value, m=$('emo').value.trim(), c=$('ecol').value;
   if(!t||!dt){toast('제목과 날짜를 입력하세요.','err');return;}
+  const btn=$('evSaveBtn');
+  btn.disabled=true; btn.textContent='저장 중...';
   const result = await sheetPost({ sheet:'일정', action:'append', data:[t, dt, tm, m, c] });
+  btn.disabled=false; btn.textContent='일정 저장';
   if(result.success !== false) {
     closeM('mev');
     ['etit','emo'].forEach(i=>$(i).value='');
     await loadEvents();
     toast('일정이 저장되었습니다.', 'ok');
+  } else {
+    toast('저장에 실패했습니다. 다시 시도해 주세요.', 'err');
   }
 }
 
