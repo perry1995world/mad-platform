@@ -423,10 +423,11 @@ async function sheetPost(payload) {
   const ctrl = new AbortController();
   const tid = setTimeout(() => ctrl.abort(), 15000);
   try {
+    const formData = new URLSearchParams();
+    formData.append('data', JSON.stringify(payload));
     const res = await fetch(API, {
       method: 'POST',
-      redirect: 'follow',
-      body: JSON.stringify(payload),
+      body: formData,
       signal: ctrl.signal,
     });
     clearTimeout(tid);
