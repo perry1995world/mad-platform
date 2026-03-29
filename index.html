@@ -420,17 +420,24 @@ async function sheetGet(sheet) {
 
 /* 쓰기 */
 async function sheetPost(payload) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 15000);
   try {
     const res = await fetch(API, {
       method: 'POST',
       redirect: 'follow',
       body: JSON.stringify(payload),
+      signal: ctrl.signal,
     });
+    clearTimeout(tid);
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    return await res.json();
+    const text = await res.text();
+    try { return JSON.parse(text); } catch { return { success: true }; }
   } catch(e) {
+    clearTimeout(tid);
     console.error('sheetPost 오류:', e);
-    toast('저장 실패. 잠시 후 다시 시도해 주세요.', 'err');
+    const msg = e.name === 'AbortError' ? '요청 시간이 초과되었습니다.' : '저장 실패. 잠시 후 다시 시도해 주세요.';
+    toast(msg, 'err');
     return { success: false };
   }
 }
