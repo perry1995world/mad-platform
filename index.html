@@ -202,8 +202,8 @@ body.adm-mode .edel{display:flex}
       <span class="logo-n">우리 계모임<span class="logo-s"> · 2024</span></span>
     </a>
     <nav class="nav" id="nav">
-      <button class="nb" onclick="tab('calendar',this)">📅 일정</button>
-      <button class="nb act" onclick="tab('gye',this)">💰 곗돈</button>
+      <button class="nb act" onclick="tab('calendar',this)">📅 일정</button>
+      <button class="nb" onclick="tab('gye',this)">💰 곗돈</button>
       <button class="nb" onclick="tab('todo',this)">✅ 할 일</button>
       <button class="nb adm" id="aBtn" onclick="onAdm()">🔒 관리자</button>
     </nav>
@@ -215,7 +215,7 @@ body.adm-mode .edel{display:flex}
 
 <div class="wrap">
   <!-- CALENDAR TAB -->
-  <div class="tp" id="tp-calendar">
+  <div class="tp act" id="tp-calendar">
     <div class="cl">
       <div class="card">
         <div class="ch">
@@ -245,7 +245,7 @@ body.adm-mode .edel{display:flex}
   </div>
 
   <!-- GYE TAB -->
-  <div class="tp act" id="tp-gye">
+  <div class="tp" id="tp-gye">
     <div class="gl">
       <div class="card">
         <div class="ch"><div><span class="ct">곗돈 납부 현황</span><span class="cs">총 10명 · 월 10,000원</span></div></div>
