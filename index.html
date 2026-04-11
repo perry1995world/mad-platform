@@ -179,11 +179,23 @@ body.adm-mode .edel{display:flex}
 @keyframes ti{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes to{to{opacity:0;transform:translateY(4px)}}
 
+/* LIST TABLE */
+.lt{width:100%;border-collapse:collapse}
+.lt th{font-size:11px;font-weight:600;color:var(--tx3);text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);letter-spacing:.3px;text-transform:uppercase}
+.lt td{font-size:13px;padding:10px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.lt tr:last-child td{border-bottom:none}
+.lt tr:hover td{background:var(--inner)}
+.lt .num{text-align:right;font-weight:600}
+.lt .rank{font-size:16px;text-align:center}
+.sp-chk{display:flex;align-items:center;gap:8px;padding:4px 0}
+.sp-chk input[type=checkbox]{width:16px;height:16px;accent-color:var(--dark);cursor:pointer}
+.sp-chk label{font-size:13px;font-weight:500;cursor:pointer;color:var(--tx)}
+
 /* FOOTER */
 .ft{text-align:center;padding:28px 20px;font-size:12px;color:var(--tx3);margin-top:24px}
 
 /* RESPONSIVE */
-@media(max-width:860px){.cl,.gl{grid-template-columns:1fr}.sum-row{grid-template-columns:1fr 1fr}}
+@media(max-width:860px){.cl,.gl{grid-template-columns:1fr}.sum-row{grid-template-columns:1fr 1fr}#gye-lists{grid-template-columns:1fr}}
 @media(max-width:580px){
   .nav{display:none;position:fixed;top:56px;left:0;right:0;background:var(--card);flex-direction:column;padding:10px;border-bottom:1px solid var(--border);gap:4px;z-index:99}
   .nav.open{display:flex}
@@ -263,6 +275,20 @@ body.adm-mode .edel{display:flex}
         <div class="cb" style="padding:14px 16px;">
           <div id="rlist"></div>
           <button class="btn btn-lg btn-dark ao" style="margin-top:12px;" onclick="openSp()">+ 찬조 등록</button>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;" id="gye-lists">
+      <div class="card">
+        <div class="ch"><span class="ct">납부 현황 리스트</span><span class="cs" id="payCount"></span></div>
+        <div class="cb" style="padding:0 0 4px;">
+          <div id="paylist"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><span class="ct">찬조 등록 현황 리스트</span><span class="cs" id="spCount"></span></div>
+        <div class="cb" style="padding:0 0 4px;">
+          <div id="splist"></div>
         </div>
       </div>
     </div>
@@ -352,6 +378,17 @@ body.adm-mode .edel{display:flex}
     <div class="mt"><span class="mtt">회원 추가</span><button class="mx" onclick="closeM('mam')">✕</button></div>
     <div class="mbody">
       <div class="fg"><label class="fl">이름</label><input class="fi" id="amnm" placeholder="회원 이름"></div>
+      <div class="fg">
+        <label class="fl">찬조자 여부</label>
+        <div class="sp-chk">
+          <input type="checkbox" id="amsp" onchange="document.getElementById('amspamtfg').style.display=this.checked?'block':'none'">
+          <label for="amsp">찬조자로 함께 등록</label>
+        </div>
+      </div>
+      <div class="fg" id="amspamtfg" style="display:none;">
+        <label class="fl">찬조 금액 (원)</label>
+        <input class="fi" type="text" inputmode="numeric" id="amspamt" placeholder="예: 50,000" oninput="fmtNum(this)">
+      </div>
       <div class="mact">
         <button class="btn btn-lg btn-lime" onclick="addMember()">추가</button>
         <button class="btn btn-lg btn-ghost" onclick="closeM('mam')">취소</button>
@@ -577,6 +614,30 @@ function rGye() {
   $('rlist').innerHTML = sponsors.length
     ? sponsors.map((s,i)=>`<div class="ri"><div class="rm">${md[i]||i+1+'위'}</div><div class="rn">${s.name}</div><div class="ra">${wok(s.sponsorAmt)}</div></div>`).join('')
     : '<div style="color:var(--tx3);font-size:12px;padding:10px 0;text-align:center;">찬조자가 없습니다.</div>';
+
+  // 납부 현황 리스트
+  if($('payCount')) $('payCount').textContent = `${S.members.length}명`;
+  if($('paylist')) $('paylist').innerHTML = S.members.length
+    ? `<table class="lt"><thead><tr><th>#</th><th>이름</th><th>납부 개월</th><th>납부 금액</th><th>상태</th></tr></thead><tbody>` +
+      S.members.map((m,i)=>`<tr>
+        <td style="color:var(--tx3);text-align:center;">${i+1}</td>
+        <td><strong>${m.name}</strong></td>
+        <td style="text-align:center;">${Math.floor(m.amt/10000)}개월</td>
+        <td class="num">${wok(m.amt)}</td>
+        <td>${stH[m.st]||''}</td>
+      </tr>`).join('') + `</tbody></table>`
+    : '<div style="color:var(--tx3);font-size:13px;padding:20px;text-align:center;">등록된 회원이 없습니다.</div>';
+
+  // 찬조 등록 현황 리스트
+  if($('spCount')) $('spCount').textContent = `${sponsors.length}명`;
+  if($('splist')) $('splist').innerHTML = sponsors.length
+    ? `<table class="lt"><thead><tr><th>순위</th><th>이름</th><th>찬조 금액</th></tr></thead><tbody>` +
+      sponsors.map((s,i)=>`<tr>
+        <td class="rank">${md[i]||i+1+'위'}</td>
+        <td><strong>${s.name}</strong></td>
+        <td class="num">${wok(s.sponsorAmt)}</td>
+      </tr>`).join('') + `</tbody></table>`
+    : '<div style="color:var(--tx3);font-size:13px;padding:20px;text-align:center;">등록된 찬조자가 없습니다.</div>';
 }
 
 function opGye(id) {
@@ -600,12 +661,15 @@ async function saveGye() {
 async function addMember() {
   const n = $('amnm').value.trim();
   if(!n){ toast('이름을 입력하세요.','err'); return; }
-  const { error } = await db.from('members').insert({ name:n });
+  const isSp = $('amsp').checked;
+  const spAmt = isSp ? parseNum($('amspamt').value) : 0;
+  if(isSp && !spAmt){ toast('찬조 금액을 입력하세요.','err'); return; }
+  const { error } = await db.from('members').insert({ name:n, sponsor_amt:spAmt });
   if(error){ toast(error.code==='23505'?'이미 등록된 이름입니다.':'추가 실패', 'err'); return; }
   closeM('mam');
-  $('amnm').value='';
+  $('amnm').value=''; $('amsp').checked=false; $('amspamt').value=''; $('amspamtfg').style.display='none';
   await loadMembers();
-  toast(`${n} 회원이 추가되었습니다.`, 'ok');
+  toast(`${n} 회원이 추가되었습니다.${isSp?' (찬조자 등록 완료)':''}`, 'ok');
 }
 
 async function delMember(id) {
