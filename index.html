@@ -335,7 +335,7 @@ body.adm-mode .edel{display:flex}
     <div class="mt"><span class="mtt">납부 금액 수정</span><button class="mx" onclick="closeM('mge')">✕</button></div>
     <div class="mbody">
       <div class="fg"><label class="fl">모임원</label><input class="fi" id="genm" readonly style="opacity:.6;"></div>
-      <div class="fg"><label class="fl">납부 금액 (원)</label><input class="fi" type="number" id="geam" step="10000" placeholder="예: 60000"></div>
+      <div class="fg"><label class="fl">납부 금액 (원)</label><input class="fi" type="text" inputmode="numeric" id="geam" placeholder="예: 60,000" oninput="fmtNum(this)"></div>
       <div class="fg"><label class="fl">납부 상태</label>
         <select class="fi" id="gest"><option value="paid">완납</option><option value="prepaid">선납</option><option value="partial">부분납</option><option value="unpaid">미납</option></select>
       </div>
@@ -365,7 +365,7 @@ body.adm-mode .edel{display:flex}
     <div class="mt"><span class="mtt">찬조 금액 등록</span><button class="mx" onclick="closeM('msp')">✕</button></div>
     <div class="mbody">
       <div class="fg"><label class="fl">이름</label><input class="fi" id="spnm" placeholder="모임원 이름"></div>
-      <div class="fg"><label class="fl">찬조 금액 (원)</label><input class="fi" type="number" id="spam" step="1000" placeholder="예: 30000"></div>
+      <div class="fg"><label class="fl">찬조 금액 (원)</label><input class="fi" type="text" inputmode="numeric" id="spam" placeholder="예: 30,000" oninput="fmtNum(this)"></div>
       <div class="mact">
         <button class="btn btn-lg btn-lime" onclick="addSp()">등록</button>
         <button class="btn btn-lg btn-ghost" onclick="closeM('msp')">취소</button>
@@ -395,6 +395,11 @@ const S = {
 const $ = id => document.getElementById(id);
 const wok = n => Number(n).toLocaleString('ko-KR') + '원';
 const loading = html => '<div style="text-align:center;padding:32px;color:var(--tx3);font-size:13px;">' + html + '</div>';
+function fmtNum(el) {
+  const raw = el.value.replace(/[^0-9]/g, '');
+  el.value = raw ? Number(raw).toLocaleString('ko-KR') : '';
+}
+function parseNum(val) { return parseInt(String(val).replace(/,/g, '')) || 0; }
 
 function toast(m, t='') {
   const e = document.createElement('div');
@@ -577,13 +582,13 @@ function rGye() {
 function opGye(id) {
   const m=S.members.find(m=>m.id===id); if(!m) return;
   S.eid=id;
-  $('genm').value=m.name; $('geam').value=m.amt; $('gest').value=m.st;
+  $('genm').value=m.name; $('geam').value=m.amt?Number(m.amt).toLocaleString('ko-KR'):''; $('gest').value=m.st;
   openM('mge');
 }
 
 async function saveGye() {
   const m = S.members.find(m=>m.id===S.eid); if(!m) return;
-  const newAmt = parseInt($('geam').value)||0;
+  const newAmt = parseNum($('geam').value);
   const newSt  = $('gest').value;
   const { error } = await db.from('members').update({ amt:newAmt, st:newSt }).eq('id', S.eid);
   if(error){ toast('저장 실패', 'err'); return; }
@@ -613,7 +618,7 @@ async function delMember(id) {
 }
 
 async function addSp() {
-  const n=$('spnm').value.trim(), a=parseInt($('spam').value)||0;
+  const n=$('spnm').value.trim(), a=parseNum($('spam').value);
   if(!n||!a){ toast('이름과 금액을 입력하세요.','err'); return; }
   const m = S.members.find(x=>x.name===n);
   if(!m){ toast('모임원 목록에 없는 이름입니다.','err'); return; }
