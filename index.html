@@ -180,7 +180,7 @@ body.adm-mode .edel{display:flex}
 @keyframes to{to{opacity:0;transform:translateY(4px)}}
 
 /* LIST TABLE */
-.lt{width:100%;border-collapse:collapse}
+.lt{width:100%;border-collapse:collapse;min-width:420px;}
 .lt th{font-size:11px;font-weight:600;color:var(--tx3);text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);letter-spacing:.3px;text-transform:uppercase}
 .lt td{font-size:13px;padding:10px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
 .lt tr:last-child td{border-bottom:none}
@@ -282,13 +282,13 @@ body.adm-mode .bbar{display:flex}
       <div class="card">
         <div class="ch"><span class="ct">납부 현황 리스트</span><span class="cs" id="payCount"></span></div>
         <div class="cb" style="padding:0 0 4px;">
-          <div id="paylist"></div>
+          <div id="paylist" style="overflow-x:auto;-webkit-overflow-scrolling:touch;"></div>
         </div>
       </div>
       <div class="card">
         <div class="ch"><span class="ct">찬조 등록 현황 리스트</span><span class="cs" id="spCount"></span></div>
         <div class="cb" style="padding:0 0 4px;">
-          <div id="splist"></div>
+          <div id="splist" style="overflow-x:auto;-webkit-overflow-scrolling:touch;"></div>
         </div>
       </div>
     </div>
