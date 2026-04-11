@@ -464,10 +464,23 @@ async function loadMembers() {
   rGye();
 }
 
+/* ── localStorage 이벤트 헬퍼 ── */
+const LS_EV = 'gye_events_v2';
+function lsEvLoad() { try { return JSON.parse(localStorage.getItem(LS_EV) || '[]'); } catch { return []; } }
+function lsEvSave(evs) { try { localStorage.setItem(LS_EV, JSON.stringify(evs)); } catch {} }
+
 /* ── 일정 로드 ── */
 async function loadEvents() {
+  // localStorage에서 먼저 즉시 표시
+  const local = lsEvLoad();
+  if (local.length > 0) { S.events = local; rCal(); }
+
+  // Google Sheets에서 최신 데이터 동기화
   const rows = await sheetGet('일정');
-  if (rows.length < 2) { S.events = []; rCal(); return; }
+  if (rows.length < 2) {
+    if (local.length === 0) { S.events = []; rCal(); }
+    return;
+  }
   S.events = rows.slice(1)
     .filter(r => r[0] && r[1])
     .map((r, i) => ({
@@ -480,6 +493,7 @@ async function loadEvents() {
       color: String(r[4] || 'gold'),
     }));
   S.events.sort((a, b) => a.date.localeCompare(b.date));
+  lsEvSave(S.events); // Sheets 데이터를 localStorage에 동기화
   rCal();
 }
 
@@ -584,26 +598,46 @@ function cmov(d) {
 async function addEv() {
   const t=$('etit').value.trim(), dt=$('edt').value, tm=$('etm').value, m=$('emo').value.trim(), c=$('ecol').value;
   if(!t||!dt){toast('제목과 날짜를 입력하세요.','err');return;}
-  const btn=$('evSaveBtn');
-  btn.disabled=true; btn.textContent='저장 중...';
-  const result = await sheetPost({ sheet:'일정', action:'append', data:[t, dt, tm, m, c] });
-  btn.disabled=false; btn.textContent='일정 저장';
-  if(result.success !== false) {
-    closeM('mev');
-    ['etit','emo'].forEach(i=>$(i).value='');
-    await loadEvents();
-    toast('일정이 저장되었습니다.', 'ok');
-  } else {
-    toast('저장에 실패했습니다. 다시 시도해 주세요.', 'err');
-  }
+
+  // localStorage에 즉시 저장
+  const tmpId = Date.now();
+  const newEv = { id: tmpId, row: tmpId, title: t, date: dt, time: tm, memo: m, color: c, _local: true };
+  const evs = lsEvLoad();
+  evs.push(newEv);
+  evs.sort((a,b) => a.date.localeCompare(b.date));
+  lsEvSave(evs);
+  S.events = evs;
+  rCal();
+  closeM('mev');
+  ['etit','emo'].forEach(i=>$(i).value='');
+  toast('일정이 저장되었습니다.', 'ok');
+
+  // Google Sheets에 백그라운드 동기화
+  sheetPost({ sheet:'일정', action:'append', data:[t, dt, tm, m, c] }).then(result => {
+    if (result.success !== false) {
+      loadEvents(); // Sheets에서 다시 로드해서 row 번호 동기화
+    }
+  });
 }
 
 async function delEv(id) {
   if(!confirm('이 일정을 삭제하시겠습니까?')) return;
   const ev = S.events.find(e=>e.id===id);
   if(!ev) return;
-  const result = await sheetPost({ sheet:'일정', action:'delete', row: ev.row });
-  if(result.success !== false) { await loadEvents(); toast('일정이 삭제되었습니다.'); }
+
+  // localStorage에서 즉시 삭제
+  const evs = lsEvLoad().filter(e => e.id !== id);
+  lsEvSave(evs);
+  S.events = S.events.filter(e => e.id !== id);
+  rCal();
+  toast('일정이 삭제되었습니다.');
+
+  // Sheets에서도 삭제 (로컬 임시 항목이 아닌 경우)
+  if (!ev._local) {
+    sheetPost({ sheet:'일정', action:'delete', row: ev.row }).then(result => {
+      if (result.success !== false) loadEvents();
+    });
+  }
 }
 
 function fd2(s) { const d=new Date(s+'T00:00:00'); return `${d.getMonth()+1}월 ${d.getDate()}일`; }
