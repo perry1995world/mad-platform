@@ -273,6 +273,7 @@ body.adm-mode .bbar{display:flex}
       <div class="card">
         <div class="ch"><span class="ct">🏆 명예의 찬조자</span></div>
         <div class="cb" style="padding:14px 16px;">
+          <div id="spSummary" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;"></div>
           <div id="rlist"></div>
         </div>
       </div>
@@ -610,6 +611,11 @@ function rGye() {
           <button class="edel" style="position:static;" onclick="delMember(${m.id})" title="삭제">✕</button>
         </div>`).join('')
     : '<div style="color:var(--tx3);font-size:13px;padding:20px 0;text-align:center;">회원을 추가해 주세요. (관리자 모드)</div>';
+  const spTotal = S.sponsors.reduce((s,x)=>s+x.amount, 0);
+  if($('spSummary')) $('spSummary').innerHTML = `
+    <div class="gsv"><div class="gsv-n">${wok(spTotal)}</div><div class="gsv-l">총 찬조금액</div></div>
+    <div class="gsv"><div class="gsv-n">${S.sponsors.length}명</div><div class="gsv-l">찬조자 수</div></div>`;
+
   const md = ['🥇','🥈','🥉'];
   $('rlist').innerHTML = S.sponsors.length
     ? S.sponsors.map((s,i)=>`
