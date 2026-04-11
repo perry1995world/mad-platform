@@ -248,7 +248,10 @@ body.adm-mode .edel{display:flex}
   <div class="tp" id="tp-gye">
     <div class="gl">
       <div class="card">
-        <div class="ch"><div><span class="ct">곗돈 납부 현황</span><span class="cs">총 10명 · 월 10,000원</span></div></div>
+        <div class="ch">
+          <div><span class="ct">곗돈 납부 현황</span><span class="cs" id="memCount"></span></div>
+          <button class="btn btn-sm btn-dark ao" onclick="openM('mam')">+ 회원 추가</button>
+        </div>
         <div class="cb">
           <div class="gst" id="gsts"></div>
           <div class="ml" id="mlist"></div>
@@ -343,6 +346,19 @@ body.adm-mode .edel{display:flex}
   </div>
 </div>
 
+<div class="ov" id="mam">
+  <div class="mb">
+    <div class="mt"><span class="mtt">회원 추가</span><button class="mx" onclick="closeM('mam')">✕</button></div>
+    <div class="mbody">
+      <div class="fg"><label class="fl">이름</label><input class="fi" id="amnm" placeholder="회원 이름"></div>
+      <div class="mact">
+        <button class="btn btn-lg btn-lime" onclick="addMember()">추가</button>
+        <button class="btn btn-lg btn-ghost" onclick="closeM('mam')">취소</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="msp">
   <div class="mb">
     <div class="mt"><span class="mtt">찬조 금액 등록</span><button class="mx" onclick="closeM('msp')">✕</button></div>
@@ -358,33 +374,27 @@ body.adm-mode .edel{display:flex}
 </div>
 
 <script>
-/* ═══════════════════════════════════════
-   Google Sheets 실연동 버전 v2.2
-   Web App URL: Perry PL 제공
-   ═══════════════════════════════════════ */
-const API = 'https://script.google.com/macros/s/AKfycbzxeNyDaxgEbu7CxIVKMDT5Z9atxSzUAMMqEDQKWDX1QWkIr-ltwt7fAWkZhv_arieT/exec';
-const PW  = '1234';
-
-/* ── 로컬 상태 (Sheets 데이터로 채워짐) ── */
+/* ── 상태 ── */
+const PW = '1234';
 const S = {
   adm: false,
   cy: new Date().getFullYear(),
   cm: new Date().getMonth(),
-  events:  [],
-  members: [],
-  sponsors:[],
-  todos:   [],
-  eid: null, nev: 100, ntd: 100,
+  events: [], members: [], todos: [],
+  eid: null,
 };
 
 /* ── 유틸 ── */
 const $ = id => document.getElementById(id);
 const wok = n => Number(n).toLocaleString('ko-KR') + '원';
+const LS = {
+  get: (k, d=[]) => { try { return JSON.parse(localStorage.getItem(k) ?? JSON.stringify(d)); } catch { return d; } },
+  set: (k, v)    => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
 
 function toast(m, t='') {
   const e = document.createElement('div');
-  e.className = 'toast ' + t;
-  e.textContent = m;
+  e.className = 'toast ' + t; e.textContent = m;
   $('twrap').appendChild(e);
   setTimeout(() => e.remove(), 3200);
 }
@@ -394,129 +404,10 @@ function openM(id) {
 }
 function closeM(id) { $(id).classList.remove('open'); $('pwerr')?.classList.remove('show'); }
 
-/* ── 로딩 스피너 ── */
-function setLoading(id, on) {
-  const el = $(id);
-  if(!el) return;
-  if(on) el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--tx3);font-size:13px;">⏳ 불러오는 중...</div>';
-}
-
-/* ═══════════════════════════════════════
-   GOOGLE SHEETS API
-   ═══════════════════════════════════════ */
-
-/* 읽기 */
-async function sheetGet(sheet) {
-  try {
-    const res = await fetch(`${API}?sheet=${encodeURIComponent(sheet)}`);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return await res.json(); // 2D 배열 반환
-  } catch(e) {
-    console.error('sheetGet 오류:', e);
-    toast('데이터 불러오기 실패. 네트워크를 확인해 주세요.', 'err');
-    return [];
-  }
-}
-
-/* 쓰기 */
-async function sheetPost(payload) {
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), 15000);
-  try {
-    const formData = new URLSearchParams();
-    formData.append('data', JSON.stringify(payload));
-    const res = await fetch(API, {
-      method: 'POST',
-      body: formData,
-      signal: ctrl.signal,
-    });
-    clearTimeout(tid);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const text = await res.text();
-    try { return JSON.parse(text); } catch { return { success: true }; }
-  } catch(e) {
-    clearTimeout(tid);
-    console.error('sheetPost 오류:', e);
-    const msg = e.name === 'AbortError' ? '요청 시간이 초과되었습니다.' : '저장 실패. 잠시 후 다시 시도해 주세요.';
-    toast(msg, 'err');
-    return { success: false };
-  }
-}
-
-/* ── 곗돈현황 로드 ── */
-async function loadMembers() {
-  setLoading('mlist', true);
-  const rows = await sheetGet('곗돈현황');
-  if (rows.length < 2) { S.members = []; S.sponsors = []; rGye(); return; }
-  S.members = rows.slice(1)
-    .filter(r => r[0])
-    .map((r, i) => ({
-      id:  i + 1,
-      row: i + 2, // Sheets 행 번호 (헤더 제외, 1-based)
-      name: String(r[0] || ''),
-      amt:  Number(r[1]) || 0,
-      st:   String(r[3] || 'unpaid'),
-      wc:   String(r[5] || '').toLowerCase() === 'true',
-    }));
-  S.sponsors = rows.slice(1)
-    .filter(r => r[0] && Number(r[4]) > 0)
-    .map(r => ({ name: String(r[0]), amt: Number(r[4]) }));
-  rGye();
-}
-
-/* ── localStorage 이벤트 헬퍼 ── */
-const LS_EV = 'gye_events_v2';
-function lsEvLoad() { try { return JSON.parse(localStorage.getItem(LS_EV) || '[]'); } catch { return []; } }
-function lsEvSave(evs) { try { localStorage.setItem(LS_EV, JSON.stringify(evs)); } catch {} }
-
-/* ── 일정 로드 ── */
-async function loadEvents() {
-  // localStorage에서 먼저 즉시 표시
-  const local = lsEvLoad();
-  if (local.length > 0) { S.events = local; rCal(); }
-
-  // Google Sheets에서 최신 데이터 동기화
-  const rows = await sheetGet('일정');
-  if (rows.length < 2) {
-    if (local.length === 0) { S.events = []; rCal(); }
-    return;
-  }
-  S.events = rows.slice(1)
-    .filter(r => r[0] && r[1])
-    .map((r, i) => ({
-      id:    i + 1,
-      row:   i + 2,
-      title: String(r[0] || ''),
-      date:  String(r[1] || ''),
-      time:  String(r[2] || ''),
-      memo:  String(r[3] || ''),
-      color: String(r[4] || 'gold'),
-    }));
-  S.events.sort((a, b) => a.date.localeCompare(b.date));
-  lsEvSave(S.events); // Sheets 데이터를 localStorage에 동기화
-  rCal();
-}
-
-/* ── Todo 로드 ── */
-async function loadTodos() {
-  setLoading('tlist', true);
-  const rows = await sheetGet('Todo');
-  if (rows.length < 2) { S.todos = []; rTodo(); return; }
-  S.todos = rows.slice(1)
-    .filter(r => r[0])
-    .map((r, i) => ({
-      id:   i + 1,
-      row:  i + 2,
-      text: String(r[0] || ''),
-      done: String(r[1]).toUpperCase() === 'TRUE',
-    }));
-  rTodo();
-}
-
-/* ── 전체 데이터 로드 ── */
-async function loadAll() {
-  await Promise.all([loadMembers(), loadEvents(), loadTodos()]);
-}
+/* ── 데이터 로드 ── */
+function loadEvents()  { S.events  = LS.get('gye_events',  []); rCal(); }
+function loadMembers() { S.members = LS.get('gye_members', []); rGye(); }
+function loadTodos()   { S.todos   = LS.get('gye_todos',   []); rTodo(); }
 
 /* ═══════════════════════════════════════
    TAB / ADMIN
@@ -527,8 +418,7 @@ function tab(n, b) {
   document.querySelectorAll('.nb:not(.adm)').forEach(x => x.classList.remove('act'));
   if(b) b.classList.add('act');
   document.getElementById('nav').classList.remove('open');
-  // 탭 전환 시 해당 데이터 새로고침
-  if(n === 'gye')      loadMembers();
+  if(n === 'gye')       loadMembers();
   else if(n === 'todo') loadTodos();
   else                  loadEvents();
 }
@@ -582,7 +472,7 @@ function rCal() {
     c.innerHTML = `<div class="cnum">${d}</div>` + evs.map(e=>`<div class="cev ${e.color||'gold'}">${e.title}</div>`).join('');
     g.appendChild(c);
   }
-  const el  = $('evlist');
+  const el = $('evlist');
   const srt = [...S.events].sort((a,b) => a.date.localeCompare(b.date));
   el.innerHTML = srt.length
     ? srt.map(e=>`<div class="ei ${e.color||'gold'}"><div class="eit">${e.title}</div><div class="eid2">${fd2(e.date)}${e.time?' '+e.time:''}${e.memo?' · '+e.memo:''}</div><button class="edel" onclick="delEv(${e.id})" title="삭제">✕</button></div>`).join('')
@@ -595,49 +485,27 @@ function cmov(d) {
   rCal();
 }
 
-async function addEv() {
+function addEv() {
   const t=$('etit').value.trim(), dt=$('edt').value, tm=$('etm').value, m=$('emo').value.trim(), c=$('ecol').value;
   if(!t||!dt){toast('제목과 날짜를 입력하세요.','err');return;}
-
-  // localStorage에 즉시 저장
-  const tmpId = Date.now();
-  const newEv = { id: tmpId, row: tmpId, title: t, date: dt, time: tm, memo: m, color: c, _local: true };
-  const evs = lsEvLoad();
-  evs.push(newEv);
+  const evs = LS.get('gye_events', []);
+  evs.push({ id: Date.now(), title: t, date: dt, time: tm, memo: m, color: c });
   evs.sort((a,b) => a.date.localeCompare(b.date));
-  lsEvSave(evs);
+  LS.set('gye_events', evs);
   S.events = evs;
   rCal();
   closeM('mev');
   ['etit','emo'].forEach(i=>$(i).value='');
   toast('일정이 저장되었습니다.', 'ok');
-
-  // Google Sheets에 백그라운드 동기화
-  sheetPost({ sheet:'일정', action:'append', data:[t, dt, tm, m, c] }).then(result => {
-    if (result.success !== false) {
-      loadEvents(); // Sheets에서 다시 로드해서 row 번호 동기화
-    }
-  });
 }
 
-async function delEv(id) {
+function delEv(id) {
   if(!confirm('이 일정을 삭제하시겠습니까?')) return;
-  const ev = S.events.find(e=>e.id===id);
-  if(!ev) return;
-
-  // localStorage에서 즉시 삭제
-  const evs = lsEvLoad().filter(e => e.id !== id);
-  lsEvSave(evs);
-  S.events = S.events.filter(e => e.id !== id);
+  const evs = LS.get('gye_events', []).filter(e => e.id !== id);
+  LS.set('gye_events', evs);
+  S.events = evs;
   rCal();
   toast('일정이 삭제되었습니다.');
-
-  // Sheets에서도 삭제 (로컬 임시 항목이 아닌 경우)
-  if (!ev._local) {
-    sheetPost({ sheet:'일정', action:'delete', row: ev.row }).then(result => {
-      if (result.success !== false) loadEvents();
-    });
-  }
 }
 
 function fd2(s) { const d=new Date(s+'T00:00:00'); return `${d.getMonth()+1}월 ${d.getDate()}일`; }
@@ -654,9 +522,10 @@ const stH = {
 const stL = {paid:'완납', prepaid:'선납', partial:'부분납', unpaid:'미납'};
 
 function rGye() {
-  const tot = S.members.reduce((s,m)=>s+m.amt, 0);
-  const pc  = S.members.filter(m=>m.st==='paid'||m.st==='prepaid').length;
+  const tot  = S.members.reduce((s,m)=>s+m.amt, 0);
+  const pc   = S.members.filter(m=>m.st==='paid'||m.st==='prepaid').length;
   const tot2 = S.members.length || 1;
+  if($('memCount')) $('memCount').textContent = `총 ${S.members.length}명`;
   $('gsts').innerHTML = `
     <div class="gsv"><div class="gsv-n">${wok(tot)}</div><div class="gsv-l">총 납부</div></div>
     <div class="gsv"><div class="gsv-n">${pc}명</div><div class="gsv-l">완납 인원</div></div>
@@ -666,18 +535,19 @@ function rGye() {
         <div class="mr">
           <div class="mav">${m.name[0]}</div>
           <div class="mi">
-            <div class="mn">${m.name}${m.wc?'<span style="font-size:10px;color:var(--tx3);font-weight:400;margin-left:5px;">와일드카드</span>':''}</div>
+            <div class="mn">${m.name}</div>
             <div class="mm">${Math.floor(m.amt/10000)}개월 납부</div>
           </div>
           ${stH[m.st]||''}
           <div class="mamt">${wok(m.amt)}<small>${stL[m.st]||''}</small></div>
           <button class="edb" onclick="opGye(${m.id})">수정</button>
+          <button class="edel" style="position:static;display:none;" onclick="delMember(${m.id})" title="삭제">✕</button>
         </div>`).join('')
-    : '<div style="color:var(--tx3);font-size:13px;padding:20px 0;text-align:center;">Sheets에서 데이터를 불러오는 중...</div>';
-  const sr  = [...S.sponsors].sort((a,b)=>b.amt-a.amt);
-  const md  = ['🥇','🥈','🥉'];
-  $('rlist').innerHTML = sr.length
-    ? sr.map((s,i)=>`<div class="ri"><div class="rm">${md[i]||i+1+'위'}</div><div class="rn">${s.name}</div><div class="ra">${wok(s.amt)}</div></div>`).join('')
+    : '<div style="color:var(--tx3);font-size:13px;padding:20px 0;text-align:center;">회원을 추가해 주세요. (관리자 모드)</div>';
+  const sponsors = S.members.filter(m=>(m.sponsorAmt||0)>0).sort((a,b)=>b.sponsorAmt-a.sponsorAmt);
+  const md = ['🥇','🥈','🥉'];
+  $('rlist').innerHTML = sponsors.length
+    ? sponsors.map((s,i)=>`<div class="ri"><div class="rm">${md[i]||i+1+'위'}</div><div class="rn">${s.name}</div><div class="ra">${wok(s.sponsorAmt)}</div></div>`).join('')
     : '<div style="color:var(--tx3);font-size:12px;padding:10px 0;text-align:center;">찬조자가 없습니다.</div>';
 }
 
@@ -688,41 +558,55 @@ function opGye(id) {
   openM('mge');
 }
 
-async function saveGye() {
-  const m = S.members.find(m=>m.id===S.eid); if(!m) return;
-  const newAmt = parseInt($('geam').value)||0;
-  const newSt  = $('gest').value;
-  const result = await sheetPost({
-    sheet: '곗돈현황',
-    action: 'write',
-    row: m.row,
-    data: [m.name, newAmt, Math.floor(newAmt/10000), newSt, m.sponsorAmt||0, m.wc ? 'true' : 'false'],
-  });
-  if(result.success !== false) {
-    closeM('mge');
-    await loadMembers();
-    toast(`${m.name} 정보가 업데이트되었습니다.`, 'ok');
-  }
+function saveGye() {
+  const members = LS.get('gye_members', []);
+  const idx = members.findIndex(m=>m.id===S.eid); if(idx===-1) return;
+  members[idx].amt = parseInt($('geam').value)||0;
+  members[idx].st  = $('gest').value;
+  LS.set('gye_members', members);
+  S.members = members;
+  closeM('mge');
+  rGye();
+  toast(`${members[idx].name} 정보가 업데이트되었습니다.`, 'ok');
 }
 
-async function addSp() {
+function addMember() {
+  const n = $('amnm').value.trim();
+  if(!n){toast('이름을 입력하세요.','err');return;}
+  const members = LS.get('gye_members', []);
+  if(members.find(m=>m.name===n)){toast('이미 등록된 이름입니다.','err');return;}
+  members.push({ id: Date.now(), name: n, amt: 0, st: 'unpaid', sponsorAmt: 0 });
+  LS.set('gye_members', members);
+  S.members = members;
+  closeM('mam');
+  $('amnm').value='';
+  rGye();
+  toast(`${n} 회원이 추가되었습니다.`, 'ok');
+}
+
+function delMember(id) {
+  const m = S.members.find(m=>m.id===id); if(!m) return;
+  if(!confirm(`${m.name} 회원을 삭제하시겠습니까?`)) return;
+  const members = LS.get('gye_members', []).filter(m=>m.id!==id);
+  LS.set('gye_members', members);
+  S.members = members;
+  rGye();
+  toast('회원이 삭제되었습니다.');
+}
+
+function addSp() {
   const n=$('spnm').value.trim(), a=parseInt($('spam').value)||0;
   if(!n||!a){toast('이름과 금액을 입력하세요.','err');return;}
-  const m = S.members.find(x=>x.name===n);
+  const members = LS.get('gye_members', []);
+  const m = members.find(x=>x.name===n);
   if(!m){toast('모임원 목록에 없는 이름입니다.','err');return;}
-  const newSponsor = (m.sponsorAmt||0) + a;
-  const result = await sheetPost({
-    sheet: '곗돈현황',
-    action: 'write',
-    row: m.row,
-    data: [m.name, m.amt, Math.floor(m.amt/10000), m.st, newSponsor, m.wc ? 'true' : 'false'],
-  });
-  if(result.success !== false) {
-    closeM('msp');
-    $('spnm').value=''; $('spam').value='';
-    await loadMembers();
-    toast('찬조 금액이 등록되었습니다.', 'ok');
-  }
+  m.sponsorAmt = (m.sponsorAmt||0) + a;
+  LS.set('gye_members', members);
+  S.members = members;
+  closeM('msp');
+  $('spnm').value=''; $('spam').value='';
+  rGye();
+  toast('찬조 금액이 등록되었습니다.', 'ok');
 }
 
 /* ═══════════════════════════════════════
@@ -744,39 +628,40 @@ function rTodo() {
     : '<div style="color:var(--tx3);font-size:13px;padding:20px 0;text-align:center;">등록된 항목이 없습니다.</div>';
 }
 
-async function addTd() {
+function addTd() {
   const v=$('tin').value.trim(); if(!v) return;
-  const result = await sheetPost({ sheet:'Todo', action:'append', data:[v, 'FALSE', S.todos.length+1] });
-  if(result.success !== false) {
-    $('tin').value='';
-    await loadTodos();
-    toast('항목이 추가되었습니다.', 'ok');
-  }
+  const todos = LS.get('gye_todos', []);
+  todos.push({ id: Date.now(), text: v, done: false });
+  LS.set('gye_todos', todos);
+  S.todos = todos;
+  $('tin').value='';
+  rTodo();
+  toast('항목이 추가되었습니다.', 'ok');
 }
 
-async function togTd(id) {
-  const t=S.todos.find(t=>t.id===id); if(!t) return;
+function togTd(id) {
+  const todos = LS.get('gye_todos', []);
+  const t = todos.find(t=>t.id===id); if(!t) return;
   t.done = !t.done;
-  rTodo(); // 즉시 UI 반영
-  await sheetPost({ sheet:'Todo', action:'write', row:t.row, data:[t.text, t.done ? 'TRUE':'FALSE', t.row-1] });
+  LS.set('gye_todos', todos);
+  S.todos = todos;
+  rTodo();
 }
 
-async function delTd(id) {
-  const t=S.todos.find(t=>t.id===id); if(!t) return;
-  const result = await sheetPost({ sheet:'Todo', action:'delete', row:t.row });
-  if(result.success !== false) { await loadTodos(); toast('항목이 삭제되었습니다.'); }
+function delTd(id) {
+  const todos = LS.get('gye_todos', []).filter(t=>t.id!==id);
+  LS.set('gye_todos', todos);
+  S.todos = todos;
+  rTodo();
+  toast('항목이 삭제되었습니다.');
 }
 
 /* ═══════════════════════════════════════
    INIT
    ═══════════════════════════════════════ */
 (function() {
-  const t = new Date();
-  $('edt').value = t.toISOString().split('T')[0];
-  // 초기 렌더 (빈 상태로 먼저 그리고 데이터 로드)
-  rCal(); rGye(); rTodo();
-  // Google Sheets에서 실제 데이터 로드
-  loadAll();
+  $('edt').value = new Date().toISOString().split('T')[0];
+  loadEvents(); loadMembers(); loadTodos();
 })();
 </script>
 </body>
