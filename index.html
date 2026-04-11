@@ -187,9 +187,10 @@ body.adm-mode .edel{display:flex}
 .lt tr:hover td{background:var(--inner)}
 .lt .num{text-align:right;font-weight:600}
 .lt .rank{font-size:16px;text-align:center}
-.sp-chk{display:flex;align-items:center;gap:8px;padding:4px 0}
-.sp-chk input[type=checkbox]{width:16px;height:16px;accent-color:var(--dark);cursor:pointer}
-.sp-chk label{font-size:13px;font-weight:500;cursor:pointer;color:var(--tx)}
+/* BOTTOM BAR */
+.bbar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);padding:12px 24px;display:none;gap:10px;justify-content:center;z-index:90}
+body.adm-mode .bbar{display:flex}
+.wrap{padding-bottom:72px}
 
 /* FOOTER */
 .ft{text-align:center;padding:28px 20px;font-size:12px;color:var(--tx3);margin-top:24px}
@@ -263,7 +264,6 @@ body.adm-mode .edel{display:flex}
       <div class="card">
         <div class="ch">
           <div><span class="ct">곗돈 납부 현황</span><span class="cs" id="memCount"></span></div>
-          <button class="btn btn-sm btn-dark ao" onclick="openM('mam')">+ 회원 추가</button>
         </div>
         <div class="cb">
           <div class="gst" id="gsts"></div>
@@ -274,7 +274,6 @@ body.adm-mode .edel{display:flex}
         <div class="ch"><span class="ct">🏆 명예의 찬조자</span></div>
         <div class="cb" style="padding:14px 16px;">
           <div id="rlist"></div>
-          <button class="btn btn-lg btn-dark ao" style="margin-top:12px;" onclick="openSp()">+ 찬조 등록</button>
         </div>
       </div>
     </div>
@@ -315,6 +314,12 @@ body.adm-mode .edel{display:flex}
 
 <div class="ft">우리 계모임 · 모임원 전용 · 2024</div>
 <div class="tw2" id="twrap"></div>
+
+<!-- BOTTOM BAR (관리자 모드에서만 표시) -->
+<div class="bbar">
+  <button class="btn btn-dark" style="padding:10px 28px;font-size:14px;" onclick="openM('mam')">+ 회원 추가</button>
+  <button class="btn btn-lime" style="padding:10px 28px;font-size:14px;" onclick="$('spnm').value='';$('spam').value='';openM('msp')">+ 찬조 등록</button>
+</div>
 
 <!-- MODALS -->
 <div class="ov" id="madm">
@@ -378,17 +383,6 @@ body.adm-mode .edel{display:flex}
     <div class="mt"><span class="mtt">회원 추가</span><button class="mx" onclick="closeM('mam')">✕</button></div>
     <div class="mbody">
       <div class="fg"><label class="fl">이름</label><input class="fi" id="amnm" placeholder="회원 이름"></div>
-      <div class="fg">
-        <label class="fl">찬조자 여부</label>
-        <div class="sp-chk">
-          <input type="checkbox" id="amsp" onchange="document.getElementById('amspamtfg').style.display=this.checked?'block':'none'">
-          <label for="amsp">찬조자로 함께 등록</label>
-        </div>
-      </div>
-      <div class="fg" id="amspamtfg" style="display:none;">
-        <label class="fl">찬조 금액 (원)</label>
-        <input class="fi" type="text" inputmode="numeric" id="amspamt" placeholder="예: 50,000" oninput="fmtNum(this)">
-      </div>
       <div class="mact">
         <button class="btn btn-lg btn-lime" onclick="addMember()">추가</button>
         <button class="btn btn-lg btn-ghost" onclick="closeM('mam')">취소</button>
@@ -401,7 +395,7 @@ body.adm-mode .edel{display:flex}
   <div class="mb">
     <div class="mt"><span class="mtt">찬조 금액 등록</span><button class="mx" onclick="closeM('msp')">✕</button></div>
     <div class="mbody">
-      <div class="fg"><label class="fl">이름</label><select class="fi" id="spnm"></select></div>
+      <div class="fg"><label class="fl">이름</label><input class="fi" id="spnm" placeholder="찬조자 이름 (회원 외 가능)"></div>
       <div class="fg"><label class="fl">찬조 금액 (원)</label><input class="fi" type="text" inputmode="numeric" id="spam" placeholder="예: 30,000" oninput="fmtNum(this)"></div>
       <div class="mact">
         <button class="btn btn-lg btn-lime" onclick="addSp()">등록</button>
@@ -424,7 +418,7 @@ const S = {
   adm: false,
   cy: new Date().getFullYear(),
   cm: new Date().getMonth(),
-  events: [], members: [], todos: [],
+  events: [], members: [], sponsors: [], todos: [],
   eid: null,
 };
 
@@ -467,6 +461,13 @@ async function loadMembers() {
   rGye();
 }
 
+async function loadSponsors() {
+  const { data, error } = await db.from('sponsors').select('*').order('amount', { ascending: false });
+  if(error){ toast('찬조자 불러오기 실패', 'err'); return; }
+  S.sponsors = (data||[]).map(r => ({ id:r.id, name:r.name, amount:r.amount }));
+  rGye();
+}
+
 async function loadTodos() {
   $('tlist').innerHTML = loading('불러오는 중...');
   const { data, error } = await db.from('todos').select('*').order('created_at');
@@ -484,7 +485,7 @@ function tab(n, b) {
   document.querySelectorAll('.nb:not(.adm)').forEach(x => x.classList.remove('act'));
   if(b) b.classList.add('act');
   document.getElementById('nav').classList.remove('open');
-  if(n === 'gye')       loadMembers();
+  if(n === 'gye')       { loadMembers(); loadSponsors(); }
   else if(n === 'todo') loadTodos();
   else                  loadEvents();
 }
@@ -609,10 +610,15 @@ function rGye() {
           <button class="edel" style="position:static;" onclick="delMember(${m.id})" title="삭제">✕</button>
         </div>`).join('')
     : '<div style="color:var(--tx3);font-size:13px;padding:20px 0;text-align:center;">회원을 추가해 주세요. (관리자 모드)</div>';
-  const sponsors = S.members.filter(m=>(m.sponsorAmt||0)>0).sort((a,b)=>b.sponsorAmt-a.sponsorAmt);
   const md = ['🥇','🥈','🥉'];
-  $('rlist').innerHTML = sponsors.length
-    ? sponsors.map((s,i)=>`<div class="ri"><div class="rm">${md[i]||i+1+'위'}</div><div class="rn">${s.name}</div><div class="ra">${wok(s.sponsorAmt)}</div></div>`).join('')
+  $('rlist').innerHTML = S.sponsors.length
+    ? S.sponsors.map((s,i)=>`
+        <div class="ri">
+          <div class="rm">${md[i]||i+1+'위'}</div>
+          <div class="rn">${s.name}</div>
+          <div class="ra">${wok(s.amount)}</div>
+          <button class="edel" style="position:static;" onclick="delSponsor(${s.id})" title="삭제">✕</button>
+        </div>`).join('')
     : '<div style="color:var(--tx3);font-size:12px;padding:10px 0;text-align:center;">찬조자가 없습니다.</div>';
 
   // 납부 현황 리스트
@@ -629,13 +635,13 @@ function rGye() {
     : '<div style="color:var(--tx3);font-size:13px;padding:20px;text-align:center;">등록된 회원이 없습니다.</div>';
 
   // 찬조 등록 현황 리스트
-  if($('spCount')) $('spCount').textContent = `${sponsors.length}명`;
-  if($('splist')) $('splist').innerHTML = sponsors.length
+  if($('spCount')) $('spCount').textContent = `${S.sponsors.length}명`;
+  if($('splist')) $('splist').innerHTML = S.sponsors.length
     ? `<table class="lt"><thead><tr><th>순위</th><th>이름</th><th>찬조 금액</th></tr></thead><tbody>` +
-      sponsors.map((s,i)=>`<tr>
+      S.sponsors.map((s,i)=>`<tr>
         <td class="rank">${md[i]||i+1+'위'}</td>
         <td><strong>${s.name}</strong></td>
-        <td class="num">${wok(s.sponsorAmt)}</td>
+        <td class="num">${wok(s.amount)}</td>
       </tr>`).join('') + `</tbody></table>`
     : '<div style="color:var(--tx3);font-size:13px;padding:20px;text-align:center;">등록된 찬조자가 없습니다.</div>';
 }
@@ -661,15 +667,12 @@ async function saveGye() {
 async function addMember() {
   const n = $('amnm').value.trim();
   if(!n){ toast('이름을 입력하세요.','err'); return; }
-  const isSp = $('amsp').checked;
-  const spAmt = isSp ? parseNum($('amspamt').value) : 0;
-  if(isSp && !spAmt){ toast('찬조 금액을 입력하세요.','err'); return; }
-  const { error } = await db.from('members').insert({ name:n, sponsor_amt:spAmt });
+  const { error } = await db.from('members').insert({ name:n });
   if(error){ toast(error.code==='23505'?'이미 등록된 이름입니다.':'추가 실패', 'err'); return; }
   closeM('mam');
-  $('amnm').value=''; $('amsp').checked=false; $('amspamt').value=''; $('amspamtfg').style.display='none';
+  $('amnm').value='';
   await loadMembers();
-  toast(`${n} 회원이 추가되었습니다.${isSp?' (찬조자 등록 완료)':''}`, 'ok');
+  toast(`${n} 회원이 추가되었습니다.`, 'ok');
 }
 
 async function delMember(id) {
@@ -681,26 +684,23 @@ async function delMember(id) {
   toast('회원이 삭제되었습니다.');
 }
 
-function openSp() {
-  const sel = $('spnm');
-  sel.innerHTML = S.members.length
-    ? S.members.map(m=>`<option value="${m.name}">${m.name}</option>`).join('')
-    : '<option value="">회원이 없습니다</option>';
-  $('spam').value = '';
-  openM('msp');
-}
-
 async function addSp() {
   const n=$('spnm').value.trim(), a=parseNum($('spam').value);
   if(!n||!a){ toast('이름과 금액을 입력하세요.','err'); return; }
-  const m = S.members.find(x=>x.name===n);
-  if(!m){ toast('모임원 목록에 없는 이름입니다.','err'); return; }
-  const { error } = await db.from('members').update({ sponsor_amt:(m.sponsorAmt||0)+a }).eq('id', m.id);
+  const { error } = await db.from('sponsors').insert({ name:n, amount:a });
   if(error){ toast('저장 실패', 'err'); return; }
   closeM('msp');
   $('spnm').value=''; $('spam').value='';
-  await loadMembers();
+  await loadSponsors();
   toast('찬조 금액이 등록되었습니다.', 'ok');
+}
+
+async function delSponsor(id) {
+  if(!confirm('이 찬조 내역을 삭제하시겠습니까?')) return;
+  const { error } = await db.from('sponsors').delete().eq('id', id);
+  if(error){ toast('삭제 실패', 'err'); return; }
+  await loadSponsors();
+  toast('찬조 내역이 삭제되었습니다.');
 }
 
 /* ═══════════════════════════════════════
@@ -751,7 +751,7 @@ async function delTd(id) {
    ═══════════════════════════════════════ */
 (function() {
   $('edt').value = new Date().toISOString().split('T')[0];
-  loadEvents(); loadMembers(); loadTodos();
+  loadEvents(); loadMembers(); loadSponsors(); loadTodos();
 })();
 </script>
 </body>
