@@ -262,7 +262,7 @@ body.adm-mode .edel{display:flex}
         <div class="ch"><span class="ct">🏆 명예의 찬조자</span></div>
         <div class="cb" style="padding:14px 16px;">
           <div id="rlist"></div>
-          <button class="btn btn-lg btn-dark ao" style="margin-top:12px;" onclick="openM('msp')">+ 찬조 등록</button>
+          <button class="btn btn-lg btn-dark ao" style="margin-top:12px;" onclick="openSp()">+ 찬조 등록</button>
         </div>
       </div>
     </div>
@@ -364,7 +364,7 @@ body.adm-mode .edel{display:flex}
   <div class="mb">
     <div class="mt"><span class="mtt">찬조 금액 등록</span><button class="mx" onclick="closeM('msp')">✕</button></div>
     <div class="mbody">
-      <div class="fg"><label class="fl">이름</label><input class="fi" id="spnm" placeholder="모임원 이름"></div>
+      <div class="fg"><label class="fl">이름</label><select class="fi" id="spnm"></select></div>
       <div class="fg"><label class="fl">찬조 금액 (원)</label><input class="fi" type="text" inputmode="numeric" id="spam" placeholder="예: 30,000" oninput="fmtNum(this)"></div>
       <div class="mact">
         <button class="btn btn-lg btn-lime" onclick="addSp()">등록</button>
@@ -569,7 +569,7 @@ function rGye() {
           ${stH[m.st]||''}
           <div class="mamt">${wok(m.amt)}<small>${stL[m.st]||''}</small></div>
           <button class="edb" onclick="opGye(${m.id})">수정</button>
-          <button class="edel" style="position:static;display:none;" onclick="delMember(${m.id})" title="삭제">✕</button>
+          <button class="edel" style="position:static;" onclick="delMember(${m.id})" title="삭제">✕</button>
         </div>`).join('')
     : '<div style="color:var(--tx3);font-size:13px;padding:20px 0;text-align:center;">회원을 추가해 주세요. (관리자 모드)</div>';
   const sponsors = S.members.filter(m=>(m.sponsorAmt||0)>0).sort((a,b)=>b.sponsorAmt-a.sponsorAmt);
@@ -615,6 +615,15 @@ async function delMember(id) {
   if(error){ toast('삭제 실패', 'err'); return; }
   await loadMembers();
   toast('회원이 삭제되었습니다.');
+}
+
+function openSp() {
+  const sel = $('spnm');
+  sel.innerHTML = S.members.length
+    ? S.members.map(m=>`<option value="${m.name}">${m.name}</option>`).join('')
+    : '<option value="">회원이 없습니다</option>';
+  $('spam').value = '';
+  openM('msp');
 }
 
 async function addSp() {
