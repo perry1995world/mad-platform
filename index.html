@@ -371,6 +371,7 @@ body.adm-mode .bbar{display:flex}
       <div class="fg"><label class="fl">납부 상태</label>
         <select class="fi" id="gest"><option value="paid">완납</option><option value="prepaid">선납</option><option value="partial">부분납</option><option value="unpaid">미납</option></select>
       </div>
+      <div class="fg"><label class="fl">납부 날짜</label><input class="fi" type="date" id="gedt"></div>
       <div class="mact">
         <button class="btn btn-lg btn-lime" onclick="saveGye()">저장</button>
         <button class="btn btn-lg btn-ghost" onclick="closeM('mge')">취소</button>
@@ -458,7 +459,7 @@ async function loadMembers() {
   $('mlist').innerHTML = loading('불러오는 중...');
   const { data, error } = await db.from('members').select('*').order('created_at');
   if(error){ toast('회원 불러오기 실패', 'err'); return; }
-  S.members = (data||[]).map(r => ({ id:r.id, name:r.name, amt:r.amt||0, st:r.st||'unpaid', sponsorAmt:r.sponsor_amt||0 }));
+  S.members = (data||[]).map(r => ({ id:r.id, name:r.name, amt:r.amt||0, st:r.st||'unpaid', sponsorAmt:r.sponsor_amt||0, paidAt:r.paid_at||'' }));
   rGye();
 }
 
@@ -576,6 +577,7 @@ async function delEv(id) {
 }
 
 function fd2(s) { const d=new Date(s+'T00:00:00'); return `${d.getMonth()+1}월 ${d.getDate()}일`; }
+function fmtDate(s) { if(!s) return '-'; const d=new Date(s+'T00:00:00'); return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`; }
 
 /* ═══════════════════════════════════════
    곗돈 현황
@@ -603,7 +605,7 @@ function rGye() {
           <div class="mav">${m.name[0]}</div>
           <div class="mi">
             <div class="mn">${m.name}</div>
-            <div class="mm">${Math.floor(m.amt/10000)}개월 납부</div>
+            <div class="mm">${Math.floor(m.amt/10000)}개월 납부${m.paidAt?' · '+fmtDate(m.paidAt):''}</div>
           </div>
           ${stH[m.st]||''}
           <div class="mamt">${wok(m.amt)}<small>${stL[m.st]||''}</small></div>
@@ -630,13 +632,14 @@ function rGye() {
   // 납부 현황 리스트
   if($('payCount')) $('payCount').textContent = `${S.members.length}명`;
   if($('paylist')) $('paylist').innerHTML = S.members.length
-    ? `<table class="lt"><thead><tr><th>#</th><th>이름</th><th>납부 개월</th><th>납부 금액</th><th>상태</th></tr></thead><tbody>` +
+    ? `<table class="lt"><thead><tr><th>#</th><th>이름</th><th>납부 개월</th><th>납부 금액</th><th>상태</th><th>납부일</th></tr></thead><tbody>` +
       S.members.map((m,i)=>`<tr>
         <td style="color:var(--tx3);text-align:center;">${i+1}</td>
         <td><strong>${m.name}</strong></td>
         <td style="text-align:center;">${Math.floor(m.amt/10000)}개월</td>
         <td class="num">${wok(m.amt)}</td>
         <td>${stH[m.st]||''}</td>
+        <td style="color:var(--tx3);font-size:12px;">${m.paidAt?fmtDate(m.paidAt):'-'}</td>
       </tr>`).join('') + `</tbody></table>`
     : '<div style="color:var(--tx3);font-size:13px;padding:20px;text-align:center;">등록된 회원이 없습니다.</div>';
 
@@ -655,7 +658,7 @@ function rGye() {
 function opGye(id) {
   const m=S.members.find(m=>m.id===id); if(!m) return;
   S.eid=id;
-  $('genm').value=m.name; $('geam').value=m.amt?Number(m.amt).toLocaleString('ko-KR'):''; $('gest').value=m.st;
+  $('genm').value=m.name; $('geam').value=m.amt?Number(m.amt).toLocaleString('ko-KR'):''; $('gest').value=m.st; $('gedt').value=m.paidAt||'';
   openM('mge');
 }
 
@@ -663,7 +666,8 @@ async function saveGye() {
   const m = S.members.find(m=>m.id===S.eid); if(!m) return;
   const newAmt = parseNum($('geam').value);
   const newSt  = $('gest').value;
-  const { error } = await db.from('members').update({ amt:newAmt, st:newSt }).eq('id', S.eid);
+  const newDt = $('gedt').value || null;
+  const { error } = await db.from('members').update({ amt:newAmt, st:newSt, paid_at:newDt }).eq('id', S.eid);
   if(error){ toast('저장 실패', 'err'); return; }
   closeM('mge');
   await loadMembers();
