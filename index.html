@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>우리 계모임</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --bg:#EBEBEB; --card:#FFFFFF; --inner:#F5F5F5;
@@ -374,6 +375,12 @@ body.adm-mode .edel{display:flex}
 </div>
 
 <script>
+/* ── Supabase 초기화 ── */
+const db = window.supabase.createClient(
+  'https://ztxeagciidubvhkselbh.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0eGVhZ2NpaWR1YnZoa3NlbGJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4NDk2MzUsImV4cCI6MjA5MTQyNTYzNX0.S-t7YvyjudZxKlu_c-3zvIDOV6JjIRcaZGGEYy8HQLg'
+);
+
 /* ── 상태 ── */
 const PW = '1234';
 const S = {
@@ -387,10 +394,7 @@ const S = {
 /* ── 유틸 ── */
 const $ = id => document.getElementById(id);
 const wok = n => Number(n).toLocaleString('ko-KR') + '원';
-const LS = {
-  get: (k, d=[]) => { try { return JSON.parse(localStorage.getItem(k) ?? JSON.stringify(d)); } catch { return d; } },
-  set: (k, v)    => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
-};
+const loading = html => '<div style="text-align:center;padding:32px;color:var(--tx3);font-size:13px;">' + html + '</div>';
 
 function toast(m, t='') {
   const e = document.createElement('div');
@@ -405,9 +409,29 @@ function openM(id) {
 function closeM(id) { $(id).classList.remove('open'); $('pwerr')?.classList.remove('show'); }
 
 /* ── 데이터 로드 ── */
-function loadEvents()  { S.events  = LS.get('gye_events',  []); rCal(); }
-function loadMembers() { S.members = LS.get('gye_members', []); rGye(); }
-function loadTodos()   { S.todos   = LS.get('gye_todos',   []); rTodo(); }
+async function loadEvents() {
+  $('evlist').innerHTML = loading('불러오는 중...');
+  const { data, error } = await db.from('events').select('*').order('date');
+  if(error){ toast('일정 불러오기 실패', 'err'); return; }
+  S.events = (data||[]).map(r => ({ id:r.id, title:r.title, date:r.date, time:r.time||'', memo:r.memo||'', color:r.color||'gold' }));
+  rCal();
+}
+
+async function loadMembers() {
+  $('mlist').innerHTML = loading('불러오는 중...');
+  const { data, error } = await db.from('members').select('*').order('created_at');
+  if(error){ toast('회원 불러오기 실패', 'err'); return; }
+  S.members = (data||[]).map(r => ({ id:r.id, name:r.name, amt:r.amt||0, st:r.st||'unpaid', sponsorAmt:r.sponsor_amt||0 }));
+  rGye();
+}
+
+async function loadTodos() {
+  $('tlist').innerHTML = loading('불러오는 중...');
+  const { data, error } = await db.from('todos').select('*').order('created_at');
+  if(error){ toast('할 일 불러오기 실패', 'err'); return; }
+  S.todos = (data||[]).map(r => ({ id:r.id, text:r.text, done:r.done||false }));
+  rTodo();
+}
 
 /* ═══════════════════════════════════════
    TAB / ADMIN
@@ -485,26 +509,25 @@ function cmov(d) {
   rCal();
 }
 
-function addEv() {
+async function addEv() {
   const t=$('etit').value.trim(), dt=$('edt').value, tm=$('etm').value, m=$('emo').value.trim(), c=$('ecol').value;
   if(!t||!dt){toast('제목과 날짜를 입력하세요.','err');return;}
-  const evs = LS.get('gye_events', []);
-  evs.push({ id: Date.now(), title: t, date: dt, time: tm, memo: m, color: c });
-  evs.sort((a,b) => a.date.localeCompare(b.date));
-  LS.set('gye_events', evs);
-  S.events = evs;
-  rCal();
+  const btn=$('evSaveBtn');
+  btn.disabled=true; btn.textContent='저장 중...';
+  const { error } = await db.from('events').insert({ title:t, date:dt, time:tm, memo:m, color:c });
+  btn.disabled=false; btn.textContent='일정 저장';
+  if(error){ toast('저장 실패: '+error.message, 'err'); return; }
   closeM('mev');
   ['etit','emo'].forEach(i=>$(i).value='');
+  await loadEvents();
   toast('일정이 저장되었습니다.', 'ok');
 }
 
-function delEv(id) {
+async function delEv(id) {
   if(!confirm('이 일정을 삭제하시겠습니까?')) return;
-  const evs = LS.get('gye_events', []).filter(e => e.id !== id);
-  LS.set('gye_events', evs);
-  S.events = evs;
-  rCal();
+  const { error } = await db.from('events').delete().eq('id', id);
+  if(error){ toast('삭제 실패', 'err'); return; }
+  await loadEvents();
   toast('일정이 삭제되었습니다.');
 }
 
@@ -558,54 +581,47 @@ function opGye(id) {
   openM('mge');
 }
 
-function saveGye() {
-  const members = LS.get('gye_members', []);
-  const idx = members.findIndex(m=>m.id===S.eid); if(idx===-1) return;
-  members[idx].amt = parseInt($('geam').value)||0;
-  members[idx].st  = $('gest').value;
-  LS.set('gye_members', members);
-  S.members = members;
+async function saveGye() {
+  const m = S.members.find(m=>m.id===S.eid); if(!m) return;
+  const newAmt = parseInt($('geam').value)||0;
+  const newSt  = $('gest').value;
+  const { error } = await db.from('members').update({ amt:newAmt, st:newSt }).eq('id', S.eid);
+  if(error){ toast('저장 실패', 'err'); return; }
   closeM('mge');
-  rGye();
-  toast(`${members[idx].name} 정보가 업데이트되었습니다.`, 'ok');
+  await loadMembers();
+  toast(`${m.name} 정보가 업데이트되었습니다.`, 'ok');
 }
 
-function addMember() {
+async function addMember() {
   const n = $('amnm').value.trim();
-  if(!n){toast('이름을 입력하세요.','err');return;}
-  const members = LS.get('gye_members', []);
-  if(members.find(m=>m.name===n)){toast('이미 등록된 이름입니다.','err');return;}
-  members.push({ id: Date.now(), name: n, amt: 0, st: 'unpaid', sponsorAmt: 0 });
-  LS.set('gye_members', members);
-  S.members = members;
+  if(!n){ toast('이름을 입력하세요.','err'); return; }
+  const { error } = await db.from('members').insert({ name:n });
+  if(error){ toast(error.code==='23505'?'이미 등록된 이름입니다.':'추가 실패', 'err'); return; }
   closeM('mam');
   $('amnm').value='';
-  rGye();
+  await loadMembers();
   toast(`${n} 회원이 추가되었습니다.`, 'ok');
 }
 
-function delMember(id) {
+async function delMember(id) {
   const m = S.members.find(m=>m.id===id); if(!m) return;
   if(!confirm(`${m.name} 회원을 삭제하시겠습니까?`)) return;
-  const members = LS.get('gye_members', []).filter(m=>m.id!==id);
-  LS.set('gye_members', members);
-  S.members = members;
-  rGye();
+  const { error } = await db.from('members').delete().eq('id', id);
+  if(error){ toast('삭제 실패', 'err'); return; }
+  await loadMembers();
   toast('회원이 삭제되었습니다.');
 }
 
-function addSp() {
+async function addSp() {
   const n=$('spnm').value.trim(), a=parseInt($('spam').value)||0;
-  if(!n||!a){toast('이름과 금액을 입력하세요.','err');return;}
-  const members = LS.get('gye_members', []);
-  const m = members.find(x=>x.name===n);
-  if(!m){toast('모임원 목록에 없는 이름입니다.','err');return;}
-  m.sponsorAmt = (m.sponsorAmt||0) + a;
-  LS.set('gye_members', members);
-  S.members = members;
+  if(!n||!a){ toast('이름과 금액을 입력하세요.','err'); return; }
+  const m = S.members.find(x=>x.name===n);
+  if(!m){ toast('모임원 목록에 없는 이름입니다.','err'); return; }
+  const { error } = await db.from('members').update({ sponsor_amt:(m.sponsorAmt||0)+a }).eq('id', m.id);
+  if(error){ toast('저장 실패', 'err'); return; }
   closeM('msp');
   $('spnm').value=''; $('spam').value='';
-  rGye();
+  await loadMembers();
   toast('찬조 금액이 등록되었습니다.', 'ok');
 }
 
@@ -628,31 +644,27 @@ function rTodo() {
     : '<div style="color:var(--tx3);font-size:13px;padding:20px 0;text-align:center;">등록된 항목이 없습니다.</div>';
 }
 
-function addTd() {
+async function addTd() {
   const v=$('tin').value.trim(); if(!v) return;
-  const todos = LS.get('gye_todos', []);
-  todos.push({ id: Date.now(), text: v, done: false });
-  LS.set('gye_todos', todos);
-  S.todos = todos;
+  const { error } = await db.from('todos').insert({ text:v, done:false });
+  if(error){ toast('추가 실패', 'err'); return; }
   $('tin').value='';
-  rTodo();
+  await loadTodos();
   toast('항목이 추가되었습니다.', 'ok');
 }
 
-function togTd(id) {
-  const todos = LS.get('gye_todos', []);
-  const t = todos.find(t=>t.id===id); if(!t) return;
-  t.done = !t.done;
-  LS.set('gye_todos', todos);
-  S.todos = todos;
-  rTodo();
+async function togTd(id) {
+  const t=S.todos.find(t=>t.id===id); if(!t) return;
+  const newDone = !t.done;
+  t.done = newDone; rTodo(); // 즉시 UI 반영
+  const { error } = await db.from('todos').update({ done:newDone }).eq('id', id);
+  if(error){ t.done = !newDone; rTodo(); toast('저장 실패', 'err'); }
 }
 
-function delTd(id) {
-  const todos = LS.get('gye_todos', []).filter(t=>t.id!==id);
-  LS.set('gye_todos', todos);
-  S.todos = todos;
-  rTodo();
+async function delTd(id) {
+  const { error } = await db.from('todos').delete().eq('id', id);
+  if(error){ toast('삭제 실패', 'err'); return; }
+  await loadTodos();
   toast('항목이 삭제되었습니다.');
 }
 
