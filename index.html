@@ -688,7 +688,7 @@ async function addSp() {
   const n=$('spnm').value.trim(), a=parseNum($('spam').value);
   if(!n||!a){ toast('이름과 금액을 입력하세요.','err'); return; }
   const { error } = await db.from('sponsors').insert({ name:n, amount:a });
-  if(error){ toast('저장 실패', 'err'); return; }
+  if(error){ toast('저장 실패: ' + error.message, 'err'); console.error(error); return; }
   closeM('msp');
   $('spnm').value=''; $('spam').value='';
   await loadSponsors();
